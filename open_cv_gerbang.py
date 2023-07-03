@@ -1,15 +1,13 @@
 import cv2
 import torch
+import time
+from datetime import datetime
 
 
 def detectx(frame, model):
     frame = [frame]
     print(f"[INFO] Detecting. . . ")
     results = model(frame)
-    # results.show()
-    # print( results.xyxyn[0])
-    # print(results.xyxyn[0][:, -1])
-    # print(results.xyxyn[0][:, :-1])
 
     labels, cordinates = results.xyxyn[0][:, -1], results.xyxyn[0][:, :-1]
 
@@ -29,12 +27,53 @@ def scale_value_h(height_f):
     return round(scaled_h)
 
 
+def send_warning(text):
+    # Specify the file path
+    file_path = "Email_warning.txt"
+    # Open the file in write mode
+    with open(file_path, "w") as file:
+        # Write the text to the file
+        file.write(text)
+
+
+def state_and_send(state_percentage):
+    global state, triger, start_time
+    if state != "close":
+        if state_percentage > 70:
+            triger = "off"
+            state = "close"
+        else:
+            if triger == "on":
+                time_now = time.time() - start_time
+                if time_now > 30:
+                    send_warning(
+                        f'[GATE WARNING] the gate had been open for half an hour [{datetime.now().strftime("%H:%M %Y-%m-%d")}]s'
+                    )
+                    triger = "off"
+
+    elif state != "open":
+        if state_percentage < 30:
+            state = "open"
+            start_time = time.time()
+            triger = "on"
+
+    else:
+        if state_percentage > 70:
+            state = "close"
+        if state_percentage < 30:
+            state = "open"
+        triger = ""
+    return state
+
+
 leng = 0
 height_f = 615
+state = None
+triger = None
 
 
 def plot_boxes(results, frame, classes):
-    global leng, height_f
+    global leng, height_f, state
     """
     --> This function takes results, frame and classes
     --> results: contains labels and coordinates predicted by model on the given frame
@@ -76,10 +115,19 @@ def plot_boxes(results, frame, classes):
                     (255, 255, 255),
                     1,
                 )
+
             leng = x2 - x1
             height_f = y2 - y1
 
-    return frame, scale_value_h(height_f), scale_value(leng, height_f), height_f
+    state = state_and_send(scale_value(leng, height_f))
+
+    return (
+        frame,
+        scale_value_h(height_f),
+        scale_value(leng, height_f),
+        height_f,
+        state,
+    )
 
 
 cap = cv2.VideoCapture(r"D:\yolo_v5\Gate\20230623_085531.mp4")
@@ -108,24 +156,6 @@ if vid_out:  ### creating the video writer if video output path is given
 
 while True:
     ret, frame = cap.read()
-    # height, width, _ = frame.shape
-
-    # print(height)
-
-    # roi = frame[275:810, 805:1350]
-
-    # mask = object_detector.apply(roi)
-
-    # _, mask = cv2.threshold(mask, 100, 255, cv2.THRESH_BINARY)
-    # contours, _ = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-
-    # for cnt in frame:
-    # area = cv2.contourArea(cnt)
-    # if area > 100:
-    #     # cv2.drawContours(roi, [cnt], -1, (0, 255, 0), 2)
-    #     # x, y, w, h = cv2.boundingRect(cnt)
-    #     # cv2.rectangle(roi, (x, y), (x + w, y + h), (0, 255, 0), 3)
-
     results = detectx(frame, model=model)
     classes = model.names
 
@@ -154,7 +184,7 @@ while True:
 
         frame = cv2.putText(
             frame,
-            f"Tinggi: {plot_boxes(results, frame, classes=classes)[3]}%",
+            f"State: {plot_boxes(results, frame, classes=classes)[4]}",
             (850, 190),
             cv2.FONT_HERSHEY_SIMPLEX,
             1,
@@ -167,7 +197,6 @@ while True:
 
     cv2.imshow("Frame", frame)
 
-    # cv2.imshow("Mask", mask)
     key = cv2.waitKey(30)
 
     if vid_out:
