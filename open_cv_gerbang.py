@@ -38,7 +38,13 @@ def send_warning(text):
 
 def state_and_send(state_percentage):
     global state, triger, start_time
-    if state != "close":
+    if state is None:
+        if state_percentage > 70:
+            state = "close"
+        if state_percentage < 30:
+            state = "open"
+        triger = ""
+    elif state != "close":
         if state_percentage > 70:
             triger = "off"
             state = "close"
@@ -56,13 +62,6 @@ def state_and_send(state_percentage):
             state = "open"
             start_time = time.time()
             triger = "on"
-
-    else:
-        if state_percentage > 70:
-            state = "close"
-        if state_percentage < 30:
-            state = "open"
-        triger = ""
     return state
 
 
@@ -130,15 +129,15 @@ def plot_boxes(results, frame, classes):
     )
 
 
-cap = cv2.VideoCapture(r"D:\yolo_v5\Gate\20230623_085531.mp4")
+cap = cv2.VideoCapture(r"20230623_085531.mp4")
 
 object_detector = cv2.createBackgroundSubtractorMOG2()
 
 model = torch.hub.load(
-    "D:\yolo_v5\gate_state\yolov5",
+    "yolov5",
     "custom",
     source="local",
-    path="D:\yolo_v5\yolov5_deploy\Gate_book.pt",
+    path="Gate_book.pt",
     force_reload=True,
 )
 
